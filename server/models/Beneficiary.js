@@ -1,43 +1,63 @@
 const db = require('../config/db');
 
 class Beneficiary {
-  static async create(beneficiaryData) {
+  // Create new beneficiary with user_id
+  static async create(beneficiaryData, userId) {
     const { name, age, gender, location, category, enrollment_date, status } = beneficiaryData;
     
     const result = await db.run(
-      'INSERT INTO beneficiaries (name, age, gender, location, category, enrollment_date, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, age, gender, location, category, enrollment_date, status || 'active']
+      `INSERT INTO beneficiaries 
+       (name, age, gender, location, category, enrollment_date, status, user_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, age, gender, location, category, enrollment_date, status || 'active', userId]
     );
     
     return result.lastID;
   }
 
-  static async findAll() {
-    return await db.all('SELECT * FROM beneficiaries ORDER BY enrollment_date DESC');
+  // Get all beneficiaries for specific user
+  static async findAllByUser(userId) {
+    return await db.all(
+      'SELECT * FROM beneficiaries WHERE user_id = ? ORDER BY enrollment_date DESC',
+      [userId]
+    );
   }
 
-  static async findById(id) {
-    return await db.get('SELECT * FROM beneficiaries WHERE id = ?', [id]);
+  // Get single beneficiary (with user check)
+  static async findById(id, userId) {
+    return await db.get(
+      'SELECT * FROM beneficiaries WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
   }
 
-  static async update(id, beneficiaryData) {
+  // Update beneficiary (with user check)
+  static async update(id, beneficiaryData, userId) {
     const { name, age, gender, location, category, enrollment_date, status } = beneficiaryData;
     
     const result = await db.run(
-      'UPDATE beneficiaries SET name = ?, age = ?, gender = ?, location = ?, category = ?, enrollment_date = ?, status = ? WHERE id = ?',
-      [name, age, gender, location, category, enrollment_date, status, id]
+      `UPDATE beneficiaries 
+       SET name = ?, age = ?, gender = ?, location = ?, 
+           category = ?, enrollment_date = ?, status = ? 
+       WHERE id = ? AND user_id = ?`,
+      [name, age, gender, location, category, enrollment_date, status, id, userId]
     );
     
     return result.changes > 0;
   }
 
-  static async delete(id) {
-    const result = await db.run('DELETE FROM beneficiaries WHERE id = ?', [id]);
+  // Delete beneficiary (with user check)
+  static async delete(id, userId) {
+    const result = await db.run(
+      'DELETE FROM beneficiaries WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
     return result.changes > 0;
   }
 
-  static async getStats() {
-    const rows = await db.all(`
+  // Get statistics for specific user
+  static async getStats(userId) {
+    const stats = await db.all(`
       SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
@@ -47,9 +67,16 @@ class Beneficiary {
         location,
         COUNT(*) as location_count
       FROM beneficiaries
+      WHERE user_id = ?
       GROUP BY location
-    `);
-    return rows;
+    `, [userId]);
+
+    const totalCount = await db.get(
+      'SELECT COUNT(*) as count FROM beneficiaries WHERE user_id = ?',
+      [userId]
+    );
+
+    return { stats, total: totalCount?.count || 0 };
   }
 }
 

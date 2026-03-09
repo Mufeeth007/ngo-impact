@@ -20,9 +20,22 @@ const Navbar = () => {
   ];
 
   const handleLogout = () => {
+    // Clear all stored data
     localStorage.removeItem('token');
-    toast.success('Logged out successfully');
-    navigate('/login');
+    localStorage.removeItem('user');
+    localStorage.removeItem('theme'); // Optional: keep theme preference
+    
+    // Show success message
+    toast.success('Logged out successfully!', {
+      duration: 2000,
+      position: 'top-right',
+    });
+    
+    // Force redirect to login page
+    setTimeout(() => {
+      window.location.href = '/login'; // Use window.location for hard redirect
+      // Alternative: navigate('/login', { replace: true });
+    }, 500);
   };
 
   return (
@@ -85,15 +98,24 @@ const Navbar = () => {
               
               {/* Dropdown Menu */}
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-48 glass-card rounded-lg shadow-xl py-2">
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-2 w-48 glass-card rounded-lg shadow-xl py-2 z-50"
+                >
+                  <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Admin</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">admin@ngo.com</p>
+                  </div>
                   <button
                     onClick={handleLogout}
-                    className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2"
+                    className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 transition-colors"
                   >
                     <FaSignOutAlt />
                     <span>Logout</span>
                   </button>
-                </div>
+                </motion.div>
               )}
             </div>
           </div>

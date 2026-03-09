@@ -5,7 +5,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
-// Login route - ONLY works with database users
+// Login route
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty()
@@ -18,7 +18,6 @@ router.post('/login', [
 
     const { email, password } = req.body;
     
-    // Find user in database only
     const user = await User.findByEmail(email);
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -32,7 +31,7 @@ router.post('/login', [
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' } // Extended to 7 days
     );
 
     res.json({
@@ -45,14 +44,14 @@ router.post('/login', [
       }
     });
   } catch (error) {
-    console.error(error);
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Register route - for creating new users (admin only in production)
+// Register route - creates new user with own dataset
 router.post('/register', [
-  body('username').notEmpty(),
+  body('username').notEmpty().trim(),
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 })
 ], async (req, res) => {
@@ -64,16 +63,39 @@ router.post('/register', [
 
     const { username, email, password } = req.body;
     
+    // Check if user already exists
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const userId = await User.create({ username, email, password });
+    // Create new user (this will have its own ID)
+    const userId = await User.create({ 
+      username, 
+      email, 
+      password,
+      role: 'user' // Default role for new users
+    });
     
-    res.status(201).json({ message: 'User created successfully', userId });
+    // Generate token for automatic login after registration
+    const token = jwt.sign(
+      { id: userId, email, role: 'user' },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({ 
+      message: 'User created successfully',
+      token,
+      user: {
+        id: userId,
+        username,
+        email,
+        role: 'user'
+      }
+    });
   } catch (error) {
-    console.error(error);
+    console.error('Registration error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -87,7 +109,7 @@ router.get('/verify', auth, async (req, res) => {
     }
     res.json({ user });
   } catch (error) {
-    console.error(error);
+    console.error('Token verification error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaPlus, FaEdit, FaTrash, FaTimes } from 'react-icons/fa';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
-import { exportToCSV } from '../utils/exportUtils';
+import { useDashboard } from '../context/DashboardContext';
 
 const Activities = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState(null);
+  const { refreshDashboard } = useDashboard(); // Get refresh function
   const [formData, setFormData] = useState({
     name: '',
     category: 'Education',
@@ -20,37 +21,50 @@ const Activities = () => {
     description: ''
   });
 
+  // Fetch activities on component mount
   useEffect(() => {
     fetchActivities();
   }, []);
 
+  // Fetch all activities from backend
   const fetchActivities = async () => {
     try {
+      setLoading(true);
       const response = await axios.get('/activities');
       setActivities(response.data);
     } catch (error) {
       console.error('Error fetching activities:', error);
-      // Use dummy data if API fails
+      // Dummy data if backend fails
       setActivities([
-        {
-          id: 1,
-          name: "Education Drive Chennai",
-          category: "Education",
-          location: "Chennai",
-          date: "2024-03-15",
-          beneficiaries_count: 450,
-          budget: 250000,
-          description: "Providing educational materials"
+        { 
+          id: 1, 
+          name: "Education Drive Chennai", 
+          category: "Education", 
+          location: "Chennai", 
+          date: "2024-03-15", 
+          beneficiaries_count: 450, 
+          budget: 250000, 
+          description: "Providing educational materials to underprivileged children" 
         },
-        {
-          id: 2,
-          name: "Health Camp Mumbai",
-          category: "Healthcare",
-          location: "Mumbai",
-          date: "2024-03-10",
-          beneficiaries_count: 320,
-          budget: 180000,
-          description: "Free health checkup camp"
+        { 
+          id: 2, 
+          name: "Health Camp Mumbai", 
+          category: "Healthcare", 
+          location: "Mumbai", 
+          date: "2024-03-10", 
+          beneficiaries_count: 320, 
+          budget: 180000, 
+          description: "Free health checkup camp for rural areas" 
+        },
+        { 
+          id: 3, 
+          name: "Food Distribution Delhi", 
+          category: "Food Distribution", 
+          location: "Delhi", 
+          date: "2024-02-28", 
+          beneficiaries_count: 580, 
+          budget: 150000, 
+          description: "Monthly food distribution drive" 
         }
       ]);
     } finally {
@@ -58,22 +72,7 @@ const Activities = () => {
     }
   };
 
-const handleExport = async () => {
-  try {
-    await exportToCSV('activities');
-  } catch (error) {
-    // Fallback to client-side export
-    const success = generateClientCSV(activities, 'activities');
-    if (success) {
-      toast.success('Activities exported successfully!');
-    } else {
-      toast.error('Export failed');
-    }
-  }
-};
-
-
-
+  // Handle form input changes
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -81,36 +80,100 @@ const handleExport = async () => {
     });
   };
 
+  // Validate form before submission
+  const validateForm = () => {
+    if (!formData.name.trim()) {
+      toast.error('Activity name is required');
+      return false;
+    }
+    if (!formData.location.trim()) {
+      toast.error('Location is required');
+      return false;
+    }
+    if (!formData.date) {
+      toast.error('Date is required');
+      return false;
+    }
+    if (!formData.beneficiaries_count || formData.beneficiaries_count <= 0) {
+      toast.error('Valid beneficiaries count is required');
+      return false;
+    }
+    if (!formData.budget || formData.budget <= 0) {
+      toast.error('Valid budget amount is required');
+      return false;
+    }
+    return true;
+  };
+
+  // Handle form submission (Create or Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate form first
+    if (!validateForm()) {
+      return;
+    }
+
     try {
+      setLoading(true);
+      
       if (editingActivity) {
+        // Update existing activity
         await axios.put(`/activities/${editingActivity.id}`, formData);
-        toast.success('Activity updated successfully');
+        toast.success('✅ Activity updated successfully!');
+        await refreshDashboard('Activity updated! Dashboard refreshed.'); // Refresh dashboard
       } else {
+        // Create new activity
         await axios.post('/activities', formData);
-        toast.success('Activity added successfully');
+        toast.success('✅ Activity added successfully!');
+        await refreshDashboard('New activity added! Dashboard updated.'); // Refresh dashboard
       }
+      
+      // Close modal and refresh list
       setShowModal(false);
       resetForm();
-      fetchActivities();
+      fetchActivities(); // Refresh the list
+      
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Operation failed');
+      console.error('Submit error:', error);
+      
+      if (!error.response) {
+        toast.error('❌ Server not connected. Please start backend.');
+      } else if (error.response.status === 401) {
+        toast.error('❌ Session expired. Please login again.');
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      } else {
+        toast.error(error.response?.data?.message || 'Operation failed');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Handle delete activity
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this activity?')) {
-      try {
-        await axios.delete(`/activities/${id}`);
-        toast.success('Activity deleted successfully');
-        fetchActivities();
-      } catch (error) {
+    if (!window.confirm('Are you sure you want to delete this activity?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/activities/${id}`);
+      toast.success('✅ Activity deleted successfully');
+      await refreshDashboard('Activity deleted! Dashboard updated.'); // Refresh dashboard
+      fetchActivities(); // Refresh the list
+    } catch (error) {
+      console.error('Delete error:', error);
+      
+      if (!error.response) {
+        toast.error('❌ Server not connected');
+      } else {
         toast.error('Failed to delete activity');
       }
     }
   };
 
+  // Handle edit button click
   const handleEdit = (activity) => {
     setEditingActivity(activity);
     setFormData({
@@ -125,6 +188,7 @@ const handleExport = async () => {
     setShowModal(true);
   };
 
+  // Reset form to initial state
   const resetForm = () => {
     setFormData({
       name: '',
@@ -138,6 +202,7 @@ const handleExport = async () => {
     setEditingActivity(null);
   };
 
+  // Categories for dropdown
   const categories = ['Education', 'Healthcare', 'Food Distribution', 'Shelter', 'Training', 'Environment'];
 
   return (
@@ -146,27 +211,40 @@ const handleExport = async () => {
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {/* Header */}
+      {/* Header with Auto-Refresh Indicator */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Activities Management
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+            Activities Management
+          </h2>
+          <p className="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center">
+            <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+            Changes auto-update dashboard
+          </p>
+        </div>
         <button
           onClick={() => {
             resetForm();
             setShowModal(true);
           }}
-          className="flex items-center space-x-2 px-4 py-2 gradient-bg text-white rounded-lg hover:shadow-lg transition-shadow"
+          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all"
         >
           <FaPlus />
           <span>Add Activity</span>
         </button>
       </div>
 
+      {/* Connection Status Banner */}
+      {!navigator.onLine && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+          <p>⚠️ You are offline. Some features may not work.</p>
+        </div>
+      )}
+
       {/* Activities Grid */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -176,27 +254,29 @@ const handleExport = async () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="glass-card rounded-xl p-6 hover:shadow-xl transition-all"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all p-6"
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
                     {activity.name}
                   </h3>
-                  <span className="inline-block px-2 py-1 mt-2 text-xs rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+                  <span className="inline-block px-2 py-1 mt-2 text-xs rounded-full bg-teal-100 text-teal-800">
                     {activity.category}
                   </span>
                 </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => handleEdit(activity)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit"
                   >
                     <FaEdit />
                   </button>
                   <button
                     onClick={() => handleDelete(activity.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete"
                   >
                     <FaTrash />
                   </button>
@@ -204,14 +284,14 @@ const handleExport = async () => {
               </div>
 
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <p><span className="font-medium">Location:</span> {activity.location}</p>
-                <p><span className="font-medium">Date:</span> {new Date(activity.date).toLocaleDateString()}</p>
-                <p><span className="font-medium">Beneficiaries:</span> {activity.beneficiaries_count}</p>
-                <p><span className="font-medium">Budget:</span> ₹{Number(activity.budget).toLocaleString()}</p>
+                <p><span className="font-medium">📍 Location:</span> {activity.location}</p>
+                <p><span className="font-medium">📅 Date:</span> {new Date(activity.date).toLocaleDateString()}</p>
+                <p><span className="font-medium">👥 Beneficiaries:</span> {activity.beneficiaries_count}</p>
+                <p><span className="font-medium">💰 Budget:</span> ₹{Number(activity.budget).toLocaleString()}</p>
               </div>
 
               {activity.description && (
-                <p className="mt-4 text-sm text-gray-500 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <p className="mt-4 text-sm text-gray-500 border-t pt-4">
                   {activity.description}
                 </p>
               )}
@@ -234,7 +314,7 @@ const handleExport = async () => {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="glass-card rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
@@ -243,24 +323,17 @@ const handleExport = async () => {
                 </h3>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <FaTimes />
                 </button>
               </div>
 
-              <button
-  onClick={handleExport}
-  className="flex items-center space-x-2 px-4 py-2 glass-card text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mr-3"
->
-  <span>📥</span>
-  <span>Export CSV</span>
-</button>
-
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Activity Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Activity Name
+                    Activity Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -268,20 +341,22 @@ const handleExport = async () => {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    placeholder="Enter activity name"
                   />
                 </div>
 
+                {/* Category */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Category
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   >
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -289,9 +364,10 @@ const handleExport = async () => {
                   </select>
                 </div>
 
+                {/* Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Location
+                    Location <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -299,13 +375,15 @@ const handleExport = async () => {
                     value={formData.location}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    placeholder="Enter location"
                   />
                 </div>
 
+                {/* Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Date
+                    Date <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -313,13 +391,14 @@ const handleExport = async () => {
                     value={formData.date}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   />
                 </div>
 
+                {/* Beneficiaries Count */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Beneficiaries Count
+                    Beneficiaries Count <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -327,14 +406,16 @@ const handleExport = async () => {
                     value={formData.beneficiaries_count}
                     onChange={handleInputChange}
                     required
-                    min="0"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    min="1"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    placeholder="Enter number of beneficiaries"
                   />
                 </div>
 
+                {/* Budget */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Budget (₹)
+                    Budget (₹) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -344,10 +425,12 @@ const handleExport = async () => {
                     required
                     min="0"
                     step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    placeholder="Enter budget amount"
                   />
                 </div>
 
+                {/* Description */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Description
@@ -357,16 +440,18 @@ const handleExport = async () => {
                     value={formData.description}
                     onChange={handleInputChange}
                     rows="3"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    placeholder="Enter description (optional)"
                   ></textarea>
                 </div>
 
+                {/* Form Buttons */}
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 gradient-bg text-white py-2 rounded-lg hover:shadow-lg transition-shadow"
+                    className="flex-1 bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
                   >
-                    {editingActivity ? 'Update' : 'Create'}
+                    {editingActivity ? 'Update Activity' : 'Create Activity'}
                   </button>
                   <button
                     type="button"

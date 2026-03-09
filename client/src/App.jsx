@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
-import { DashboardProvider } from './context/DashboardContext'; // Add this
+import { DashboardProvider } from './context/DashboardContext';
 import { Toaster } from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import axios from './api/axios';
@@ -23,12 +23,7 @@ function App() {
 
   useEffect(() => {
     checkBackendConnection();
-    const token = localStorage.getItem('token');
-    if (token) {
-      verifyToken(token);
-    } else {
-      setLoading(false);
-    }
+    checkAuthStatus();
   }, []);
 
   const checkBackendConnection = async () => {
@@ -42,6 +37,16 @@ function App() {
     }
   };
 
+  const checkAuthStatus = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      verifyToken(token);
+    } else {
+      setLoading(false);
+      setIsAuthenticated(false);
+    }
+  };
+
   const verifyToken = async (token) => {
     try {
       await axios.get('/auth/verify', {
@@ -51,10 +56,25 @@ function App() {
     } catch (error) {
       console.error('Token verification failed:', error);
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
   };
+
+  // Listen for storage changes (logout in another tab)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' && !e.newValue) {
+        setIsAuthenticated(false);
+        window.location.href = '/login';
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   if (loading) {
     return (
@@ -69,8 +89,13 @@ function App() {
 
   return (
     <ThemeProvider>
-      <DashboardProvider> {/* Add this wrapper */}
-        <Router>
+      <DashboardProvider>
+        <Router
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}
+        >
           <Toaster 
             position="top-right"
             toastOptions={{
@@ -92,21 +117,23 @@ function App() {
           <Routes>
             <Route 
               path="/login" 
-              element={isAuthenticated ? <Navigate to="/" /> : <Login setIsAuthenticated={setIsAuthenticated} />} 
+              element={isAuthenticated ? <Navigate to="/" replace /> : <Login setIsAuthenticated={setIsAuthenticated} />} 
             />
             <Route 
               path="/register" 
-              element={isAuthenticated ? <Navigate to="/" /> : <Register />} 
+              element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} 
             />
             <Route 
               path="/" 
-              element={isAuthenticated ? <Layout /> : <Navigate to="/login" />}
+              element={isAuthenticated ? <Layout /> : <Navigate to="/login" replace />}
             >
               <Route index element={<Dashboard />} />
               <Route path="activities" element={<Activities />} />
               <Route path="beneficiaries" element={<Beneficiaries />} />
               <Route path="donations" element={<Donations />} />
             </Route>
+            {/* Catch all other routes */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
       </DashboardProvider>

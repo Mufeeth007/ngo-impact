@@ -1,16 +1,15 @@
 import axios from 'axios';
 
-// Get the API URL from environment variable or use default
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
-console.log('API URL:', API_URL); // For debugging
+console.log('API URL:', API_URL);
 
 const instance = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 10000 // 10 seconds timeout
+  timeout: 10000
 });
 
 // Request interceptor to add token
@@ -20,7 +19,7 @@ instance.interceptors.request.use(
     if (token) {
       config.headers['x-auth-token'] = token;
     }
-    console.log('Making request to:', config.url); // Debug log
+    console.log('Making request to:', config.url);
     return config;
   },
   (error) => {
@@ -32,7 +31,7 @@ instance.interceptors.request.use(
 // Response interceptor to handle errors
 instance.interceptors.response.use(
   (response) => {
-    console.log('Response received:', response.status); // Debug log
+    console.log('Response received:', response.status);
     return response;
   },
   (error) => {
@@ -42,10 +41,16 @@ instance.interceptors.response.use(
       console.error('Request timeout - backend might be down');
     }
     
+    // Handle 401 Unauthorized errors (token expired)
     if (error.response?.status === 401) {
       console.log('Unauthorized - redirecting to login');
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      localStorage.removeItem('user');
+      
+      // Only redirect if not already on login page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
     
     if (!error.response) {

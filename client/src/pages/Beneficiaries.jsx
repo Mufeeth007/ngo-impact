@@ -6,11 +6,11 @@ import toast from 'react-hot-toast';
 import { useDashboard } from '../context/DashboardContext';
 
 const Beneficiaries = () => {
-  const { refreshDashboard } = useDashboard();
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingBeneficiary, setEditingBeneficiary] = useState(null);
+  const { refreshDashboard } = useDashboard();
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -21,26 +21,58 @@ const Beneficiaries = () => {
     status: 'active'
   });
 
+  // Fetch beneficiaries on component mount
   useEffect(() => {
     fetchBeneficiaries();
   }, []);
 
+  // Fetch all beneficiaries from backend
   const fetchBeneficiaries = async () => {
     try {
+      setLoading(true);
       const response = await axios.get('/beneficiaries');
       setBeneficiaries(response.data);
     } catch (error) {
       console.error('Error fetching beneficiaries:', error);
-      // Dummy data
+      // Dummy data if backend fails
       setBeneficiaries([
-        { id: 1, name: "Rahul Sharma", age: 12, gender: "Male", location: "Chennai", category: "Education", enrollment_date: "2024-01-10", status: "active" },
-        { id: 2, name: "Priya Patel", age: 35, gender: "Female", location: "Mumbai", category: "Healthcare", enrollment_date: "2024-01-15", status: "active" }
+        { 
+          id: 1, 
+          name: "Rahul Sharma", 
+          age: 12, 
+          gender: "Male", 
+          location: "Chennai", 
+          category: "Education", 
+          enrollment_date: "2024-01-10", 
+          status: "active" 
+        },
+        { 
+          id: 2, 
+          name: "Priya Patel", 
+          age: 35, 
+          gender: "Female", 
+          location: "Mumbai", 
+          category: "Healthcare", 
+          enrollment_date: "2024-01-15", 
+          status: "active" 
+        },
+        { 
+          id: 3, 
+          name: "Abdul Khan", 
+          age: 45, 
+          gender: "Male", 
+          location: "Delhi", 
+          category: "Food Distribution", 
+          enrollment_date: "2024-02-01", 
+          status: "active" 
+        }
       ]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle form input changes
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -48,50 +80,90 @@ const Beneficiaries = () => {
     });
   };
 
+  // Validate form before submission
+  const validateForm = () => {
+    if (!formData.name.trim()) {
+      toast.error('Name is required');
+      return false;
+    }
+    if (!formData.age || formData.age < 0 || formData.age > 120) {
+      toast.error('Valid age is required (0-120)');
+      return false;
+    }
+    if (!formData.location) {
+      toast.error('Location is required');
+      return false;
+    }
+    if (!formData.enrollment_date) {
+      toast.error('Enrollment date is required');
+      return false;
+    }
+    return true;
+  };
+
+  // Handle form submission (Create or Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       if (editingBeneficiary) {
+        // Update existing beneficiary
         await axios.put(`/beneficiaries/${editingBeneficiary.id}`, formData);
-        toast.success('Beneficiary updated successfully');
+        toast.success('✅ Beneficiary updated successfully');
+        await refreshDashboard('Beneficiary updated! Dashboard refreshed.');
       } else {
+        // Create new beneficiary
         await axios.post('/beneficiaries', formData);
-        toast.success('Beneficiary added successfully');
+        toast.success('✅ Beneficiary added successfully');
+        await refreshDashboard('New beneficiary added! Dashboard updated.');
       }
+      
       setShowModal(false);
       resetForm();
       fetchBeneficiaries();
+      
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Operation failed');
+      console.error('Submit error:', error);
+      
+      if (!error.response) {
+        toast.error('❌ Server not connected. Please start backend.');
+      } else if (error.response.status === 401) {
+        toast.error('❌ Session expired. Please login again.');
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      } else {
+        toast.error(error.response?.data?.message || 'Operation failed');
+      }
     }
   };
-  
-  const handleExport = async () => {
-  try {
-    await exportToCSV('beneficiaries');
-  } catch (error) {
-    // Fallback to client-side export
-    const success = generateClientCSV(beneficiaries, 'beneficiaries');
-    if (success) {
-      toast.success('Beneficiaries exported successfully!');
-    } else {
-      toast.error('Export failed');
-    }
-  }
-};
 
+  // Handle delete beneficiary
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this beneficiary?')) {
-      try {
-        await axios.delete(`/beneficiaries/${id}`);
-        toast.success('Beneficiary deleted successfully');
-        fetchBeneficiaries();
-      } catch (error) {
+    if (!window.confirm('Are you sure you want to delete this beneficiary?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/beneficiaries/${id}`);
+      toast.success('✅ Beneficiary deleted successfully');
+      await refreshDashboard('Beneficiary removed! Dashboard updated.');
+      fetchBeneficiaries();
+    } catch (error) {
+      console.error('Delete error:', error);
+      
+      if (!error.response) {
+        toast.error('❌ Server not connected');
+      } else {
         toast.error('Failed to delete beneficiary');
       }
     }
   };
 
+  // Handle edit button click
   const handleEdit = (beneficiary) => {
     setEditingBeneficiary(beneficiary);
     setFormData({
@@ -106,6 +178,7 @@ const Beneficiaries = () => {
     setShowModal(true);
   };
 
+  // Reset form to initial state
   const resetForm = () => {
     setFormData({
       name: '',
@@ -119,29 +192,46 @@ const Beneficiaries = () => {
     setEditingBeneficiary(null);
   };
 
+  // Export to CSV
   const exportToCSV = () => {
-    const headers = ['Name', 'Age', 'Gender', 'Location', 'Category', 'Enrollment Date', 'Status'];
-    const csvData = beneficiaries.map(b => [
-      b.name,
-      b.age,
-      b.gender,
-      b.location,
-      b.category,
-      new Date(b.enrollment_date).toLocaleDateString(),
-      b.status
-    ]);
-    
-    const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'beneficiaries.csv';
-    a.click();
+    try {
+      const headers = ['Name', 'Age', 'Gender', 'Location', 'Category', 'Enrollment Date', 'Status'];
+      const csvData = beneficiaries.map(b => [
+        b.name,
+        b.age,
+        b.gender,
+        b.location,
+        b.category,
+        new Date(b.enrollment_date).toLocaleDateString(),
+        b.status
+      ]);
+      
+      const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `beneficiaries-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('✅ Beneficiaries exported successfully!');
+    } catch (error) {
+      toast.error('❌ Export failed');
+    }
   };
 
+  // Categories and locations for dropdowns
   const categories = ['Education', 'Healthcare', 'Food Distribution', 'Shelter', 'Training', 'Employment'];
   const locations = ['Chennai', 'Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Hyderabad', 'Kolkata'];
+
+  // Calculate statistics
+  const totalBeneficiaries = beneficiaries.length;
+  const activeBeneficiaries = beneficiaries.filter(b => b.status === 'active').length;
+  const maleCount = beneficiaries.filter(b => b.gender === 'Male').length;
+  const femaleCount = beneficiaries.filter(b => b.gender === 'Female').length;
+  const averageAge = beneficiaries.length > 0 
+    ? Math.round(beneficiaries.reduce((sum, b) => sum + b.age, 0) / beneficiaries.length) 
+    : 0;
 
   return (
     <motion.div
@@ -151,9 +241,15 @@ const Beneficiaries = () => {
     >
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Beneficiaries Management
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+            Beneficiaries Management
+          </h2>
+          <p className="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center">
+            <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+            Changes auto-update dashboard
+          </p>
+        </div>
         <div className="flex space-x-3">
           <button
             onClick={exportToCSV}
@@ -167,7 +263,7 @@ const Beneficiaries = () => {
               resetForm();
               setShowModal(true);
             }}
-            className="flex items-center space-x-2 px-4 py-2 gradient-bg text-white rounded-lg hover:shadow-lg transition-shadow"
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all"
           >
             <FaPlus />
             <span>Add Beneficiary</span>
@@ -175,39 +271,62 @@ const Beneficiaries = () => {
         </div>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="glass-card rounded-lg p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass-card rounded-lg p-4"
+        >
           <p className="text-sm text-gray-600 dark:text-gray-400">Total Beneficiaries</p>
-          <p className="text-2xl font-bold text-gray-800 dark:text-white">{beneficiaries.length}</p>
-        </div>
-        <div className="glass-card rounded-lg p-4">
+          <p className="text-2xl font-bold text-gray-800 dark:text-white">{totalBeneficiaries}</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="glass-card rounded-lg p-4"
+        >
           <p className="text-sm text-gray-600 dark:text-gray-400">Active</p>
-          <p className="text-2xl font-bold text-green-600">
-            {beneficiaries.filter(b => b.status === 'active').length}
+          <p className="text-2xl font-bold text-green-600">{activeBeneficiaries}</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="glass-card rounded-lg p-4"
+        >
+          <p className="text-sm text-gray-600 dark:text-gray-400">Gender Distribution</p>
+          <p className="text-xl font-bold text-gray-800 dark:text-white">
+            <span className="text-blue-600">♂ {maleCount}</span> / <span className="text-pink-600">♀ {femaleCount}</span>
           </p>
-        </div>
-        <div className="glass-card rounded-lg p-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Male/Female</p>
-          <p className="text-2xl font-bold text-gray-800 dark:text-white">
-            {beneficiaries.filter(b => b.gender === 'Male').length} / {beneficiaries.filter(b => b.gender === 'Female').length}
-          </p>
-        </div>
-        <div className="glass-card rounded-lg p-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Avg Age</p>
-          <p className="text-2xl font-bold text-gray-800 dark:text-white">
-            {beneficiaries.length > 0 ? Math.round(beneficiaries.reduce((sum, b) => sum + b.age, 0) / beneficiaries.length) : 0}
-          </p>
-        </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="glass-card rounded-lg p-4"
+        >
+          <p className="text-sm text-gray-600 dark:text-gray-400">Average Age</p>
+          <p className="text-2xl font-bold text-orange-600">{averageAge}</p>
+        </motion.div>
       </div>
 
       {/* Beneficiaries Table */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
         </div>
       ) : (
-        <div className="glass-card rounded-xl overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="glass-card rounded-xl overflow-hidden"
+        >
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
@@ -231,19 +350,31 @@ const Beneficiaries = () => {
                     transition={{ delay: index * 0.03 }}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{beneficiary.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{beneficiary.age}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{beneficiary.gender}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{beneficiary.location}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{beneficiary.category}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                      {beneficiary.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      {beneficiary.age}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      {beneficiary.gender}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      {beneficiary.location}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 py-1 text-xs rounded-full bg-teal-100 text-teal-800">
+                        {beneficiary.category}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                       {new Date(beneficiary.enrollment_date).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         beneficiary.status === 'active' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
                       }`}>
                         {beneficiary.status}
                       </span>
@@ -252,13 +383,15 @@ const Beneficiaries = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleEdit(beneficiary)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit"
                         >
                           <FaEdit />
                         </button>
                         <button
                           onClick={() => handleDelete(beneficiary.id)}
-                          className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
                         >
                           <FaTrash />
                         </button>
@@ -269,7 +402,13 @@ const Beneficiaries = () => {
               </tbody>
             </table>
           </div>
-        </div>
+          
+          {beneficiaries.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 dark:text-gray-400">No beneficiaries found. Add your first beneficiary!</p>
+            </div>
+          )}
+        </motion.div>
       )}
 
       {/* Add/Edit Modal */}
@@ -286,7 +425,7 @@ const Beneficiaries = () => {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="glass-card rounded-xl p-6 max-w-md w-full"
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
@@ -295,24 +434,17 @@ const Beneficiaries = () => {
                 </h3>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <FaTimes />
                 </button>
               </div>
-              
-              <button
-  onClick={handleExport}
-  className="flex items-center space-x-2 px-4 py-2 glass-card text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
->
-  <FaDownload />
-  <span>Export CSV</span>
-</button>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Name Field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Full Name
+                    Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -320,14 +452,16 @@ const Beneficiaries = () => {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    placeholder="Enter full name"
                   />
                 </div>
 
+                {/* Age and Gender Row */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Age
+                      Age <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -337,20 +471,21 @@ const Beneficiaries = () => {
                       required
                       min="0"
                       max="120"
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      placeholder="Age"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Gender
+                      Gender <span className="text-red-500">*</span>
                     </label>
                     <select
                       name="gender"
                       value={formData.gender}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                     >
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
@@ -359,16 +494,17 @@ const Beneficiaries = () => {
                   </div>
                 </div>
 
+                {/* Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Location
+                    Location <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="location"
                     value={formData.location}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   >
                     <option value="">Select Location</option>
                     {locations.map(loc => (
@@ -377,16 +513,17 @@ const Beneficiaries = () => {
                   </select>
                 </div>
 
+                {/* Category */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Category
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   >
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -394,9 +531,10 @@ const Beneficiaries = () => {
                   </select>
                 </div>
 
+                {/* Enrollment Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Enrollment Date
+                    Enrollment Date <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -404,10 +542,11 @@ const Beneficiaries = () => {
                     value={formData.enrollment_date}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   />
                 </div>
 
+                {/* Status */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Status
@@ -416,8 +555,7 @@ const Beneficiaries = () => {
                     name="status"
                     value={formData.status}
                     onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -425,12 +563,13 @@ const Beneficiaries = () => {
                   </select>
                 </div>
 
+                {/* Form Buttons */}
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 gradient-bg text-white py-2 rounded-lg hover:shadow-lg transition-shadow"
+                    className="flex-1 bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
                   >
-                    {editingBeneficiary ? 'Update' : 'Create'}
+                    {editingBeneficiary ? 'Update Beneficiary' : 'Create Beneficiary'}
                   </button>
                   <button
                     type="button"
@@ -449,4 +588,5 @@ const Beneficiaries = () => {
   );
 };
 
+// IMPORTANT: This must be a default export
 export default Beneficiaries;
