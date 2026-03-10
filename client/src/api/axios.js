@@ -19,11 +19,11 @@ instance.interceptors.request.use(
     if (token) {
       config.headers['x-auth-token'] = token;
     }
-    console.log('Making request to:', config.url);
+    console.log(`🌐 Making ${config.method.toUpperCase()} request to: ${config.url}`);
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
+    console.error('❌ Request error:', error);
     return Promise.reject(error);
   }
 );
@@ -31,30 +31,33 @@ instance.interceptors.request.use(
 // Response interceptor to handle errors
 instance.interceptors.response.use(
   (response) => {
-    console.log('Response received:', response.status);
+    console.log(`✅ Response from ${response.config.url}:`, response.status);
     return response;
   },
   (error) => {
-    console.error('Response error:', error.response || error);
-    
     if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout - backend might be down');
+      console.error('⏱️ Request timeout');
     }
     
-    // Handle 401 Unauthorized errors (token expired)
-    if (error.response?.status === 401) {
-      console.log('Unauthorized - redirecting to login');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+    if (error.response) {
+      console.error(`❌ Error ${error.response.status}:`, error.response.data);
       
-      // Only redirect if not already on login page
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+      // Handle 401 Unauthorized - Force logout
+      if (error.response.status === 401) {
+        console.log('🔒 Unauthorized - forcing logout');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
       }
-    }
-    
-    if (!error.response) {
-      console.error('Network error - is backend running?');
+      
+    } else if (error.request) {
+      console.error('📡 No response from server');
+    } else {
+      console.error('❌ Error:', error.message);
     }
     
     return Promise.reject(error);

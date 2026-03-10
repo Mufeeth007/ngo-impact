@@ -12,12 +12,16 @@ import Dashboard from './pages/Dashboard';
 import Activities from './pages/Activities';
 import Beneficiaries from './pages/Beneficiaries';
 import Donations from './pages/Donations';
+import AdminPanel from './pages/AdminPanel';
 
 // Components
 import Layout from './components/Layout';
+import AdminLayout from './components/AdminLayout';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [backendStatus, setBackendStatus] = useState('checking');
 
@@ -33,41 +37,82 @@ function App() {
       console.log('✅ Backend connection successful');
     } catch (error) {
       setBackendStatus('disconnected');
-      console.warn('⚠️ Backend not connected. Using demo data.');
+      console.warn('⚠️ Backend not connected');
     }
   };
 
   const checkAuthStatus = () => {
     const token = localStorage.getItem('token');
-    if (token) {
-      verifyToken(token);
+    const userStr = localStorage.getItem('user');
+    
+    console.log('Checking auth - Token:', token ? 'exists' : 'none');
+    
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserRole(user.role);
+        setUserData(user);
+        setIsAuthenticated(true);
+        verifyToken(token);
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+        clearAuth();
+        setLoading(false);
+      }
     } else {
+      console.log('No auth data found');
+      clearAuth();
       setLoading(false);
-      setIsAuthenticated(false);
     }
   };
 
   const verifyToken = async (token) => {
     try {
-      await axios.get('/auth/verify', {
+      const response = await axios.get('/auth/verify', {
         headers: { 'x-auth-token': token }
       });
-      setIsAuthenticated(true);
+      
+      if (response.data.user) {
+        setUserRole(response.data.user.role);
+        setUserData(response.data.user);
+        setIsAuthenticated(true);
+      }
     } catch (error) {
       console.error('Token verification failed:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setIsAuthenticated(false);
+      clearAuth();
     } finally {
       setLoading(false);
     }
+  };
+
+  const clearAuth = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setIsAuthenticated(false);
+    setUserRole(null);
+    setUserData(null);
+  };
+
+  const handleLogin = (token, user) => {
+    console.log('Login successful - User role:', user.role);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setIsAuthenticated(true);
+    setUserRole(user.role);
+    setUserData(user);
+  };
+
+  const handleLogout = () => {
+    clearAuth();
+    // Force navigation to login
+    window.location.href = '/login';
   };
 
   // Listen for storage changes (logout in another tab)
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === 'token' && !e.newValue) {
-        setIsAuthenticated(false);
+        clearAuth();
         window.location.href = '/login';
       }
     };
@@ -87,15 +132,12 @@ function App() {
     );
   }
 
+  console.log('App render - Auth:', isAuthenticated, 'Role:', userRole);
+
   return (
     <ThemeProvider>
       <DashboardProvider>
-        <Router
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true
-          }}
-        >
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Toaster 
             position="top-right"
             toastOptions={{
@@ -110,30 +152,53 @@ function App() {
           {/* Backend Connection Status Banner */}
           {backendStatus === 'disconnected' && (
             <div className="bg-yellow-500 text-white text-center py-2 px-4 fixed top-0 left-0 right-0 z-50">
-              ⚠️ Backend server not connected. Using demo data. Start the backend server on port 5000.
+              ⚠️ Backend server not connected. Using demo data.
             </div>
           )}
           
           <Routes>
+            {/* Public routes */}
             <Route 
               path="/login" 
-              element={isAuthenticated ? <Navigate to="/" replace /> : <Login setIsAuthenticated={setIsAuthenticated} />} 
+              element={
+                isAuthenticated ? 
+                  (userRole === 'admin' ? <Navigate to="/admin" replace /> : <Navigate to="/" replace />) 
+                  : <Login onLogin={handleLogin} />
+              } 
             />
             <Route 
               path="/register" 
               element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} 
             />
+            
+            {/* Admin routes - only accessible by admin */}
             <Route 
-              path="/" 
-              element={isAuthenticated ? <Layout /> : <Navigate to="/login" replace />}
+              path="/admin/*" 
+              element={
+                isAuthenticated && userRole === 'admin' ? 
+                  <AdminLayout /> : 
+                  <Navigate to={isAuthenticated ? "/" : "/login"} replace />
+              }
+            >
+              <Route index element={<AdminPanel />} />
+              <Route path="users" element={<AdminPanel />} />
+              <Route path="stats" element={<AdminPanel />} />
+            </Route>
+            
+            {/* User routes - only accessible by regular users (not admin) */}
+            <Route 
+              path="/*" 
+              element={
+                isAuthenticated ? 
+                  (userRole === 'admin' ? <Navigate to="/admin" replace /> : <Layout />) 
+                  : <Navigate to="/login" replace />
+              }
             >
               <Route index element={<Dashboard />} />
               <Route path="activities" element={<Activities />} />
               <Route path="beneficiaries" element={<Beneficiaries />} />
               <Route path="donations" element={<Donations />} />
             </Route>
-            {/* Catch all other routes */}
-            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
       </DashboardProvider>

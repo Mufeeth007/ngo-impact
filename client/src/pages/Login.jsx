@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import { FaEnvelope, FaLock, FaArrowRight } from 'react-icons/fa';
 
-const Login = ({ setIsAuthenticated }) => {
+const Login = ({ onLogin }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -36,6 +36,8 @@ const Login = ({ setIsAuthenticated }) => {
     }
     if (!formData.password) {
       newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
     }
     return newErrors;
   };
@@ -53,38 +55,58 @@ const Login = ({ setIsAuthenticated }) => {
     setErrors({});
 
     try {
+      console.log('Attempting login with:', formData.email);
+      
       const response = await axios.post('/auth/login', formData);
       
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      console.log('Login response:', response.data);
       
-      setIsAuthenticated(true);
-      toast.success(`Welcome back, ${response.data.user.username || 'Admin'}!`);
-      navigate('/');
+      const { token, user } = response.data;
+      
+      // Store in localStorage
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      // Call the onLogin callback from App.jsx
+      if (onLogin) {
+        onLogin(token, user);
+      }
+      
+      toast.success(`Welcome ${user.username || 'User'}!`);
+      
+      // Navigate based on role
+      if (user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
+      
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error details:', error.response || error);
       
       if (error.response) {
         switch (error.response.status) {
           case 401:
             toast.error('Invalid email or password');
-            setErrors({
-              general: 'Invalid email or password'
-            });
+            setErrors({ general: 'Invalid email or password' });
             break;
-          case 500:
-            toast.error('Server error. Please try again later.');
+          case 403:
+            toast.error('Account is disabled. Contact admin.');
+            setErrors({ general: 'Account disabled' });
+            break;
+          case 400:
+            toast.error('Please check your input');
+            setErrors({ general: 'Validation error' });
             break;
           default:
             toast.error(error.response.data?.message || 'Login failed');
         }
       } else if (error.request) {
         toast.error('Cannot connect to server. Please ensure backend is running.');
-        setErrors({
-          general: 'Backend server not connected. Please start the server on port 5000.'
-        });
+        setErrors({ general: 'Backend server not connected. Please try again later.' });
       } else {
         toast.error('An unexpected error occurred');
+        setErrors({ general: error.message });
       }
     } finally {
       setLoading(false);
@@ -124,7 +146,17 @@ const Login = ({ setIsAuthenticated }) => {
           transition={{ delay: 0.3 }}
           className="glass-card rounded-2xl p-8 shadow-2xl"
         >
-          {errors.general && (
+          {/* Connection Status Banner */}
+          {errors.general && errors.general.includes('backend') && (
+            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-600 dark:text-yellow-400 text-center">
+                ⚠️ {errors.general}
+              </p>
+            </div>
+          )}
+
+          {/* General Error Message */}
+          {errors.general && !errors.general.includes('backend') && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <p className="text-sm text-red-600 dark:text-red-400 text-center">
                 {errors.general}
@@ -241,6 +273,15 @@ const Login = ({ setIsAuthenticated }) => {
               </p>
             </div>
           </form>
+
+          {/* Removed Demo Accounts Section */}
+          
+          {/* Simple footer with version info */}
+          <div className="mt-6 pt-4 text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-600">
+              © 2024 NGO Impact Analytics. All rights reserved.
+            </p>
+          </div>
         </motion.div>
       </motion.div>
     </div>
