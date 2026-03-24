@@ -10,7 +10,7 @@ const Activities = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState(null);
-  const { refreshDashboard } = useDashboard(); // Get refresh function
+  const { refreshDashboard } = useDashboard();
   const [formData, setFormData] = useState({
     name: '',
     category: 'Education',
@@ -21,12 +21,10 @@ const Activities = () => {
     description: ''
   });
 
-  // Fetch activities on component mount
   useEffect(() => {
     fetchActivities();
   }, []);
 
-  // Fetch all activities from backend
   const fetchActivities = async () => {
     try {
       setLoading(true);
@@ -34,45 +32,12 @@ const Activities = () => {
       setActivities(response.data);
     } catch (error) {
       console.error('Error fetching activities:', error);
-      // Dummy data if backend fails
-      setActivities([
-        { 
-          id: 1, 
-          name: "Education Drive Chennai", 
-          category: "Education", 
-          location: "Chennai", 
-          date: "2024-03-15", 
-          beneficiaries_count: 450, 
-          budget: 250000, 
-          description: "Providing educational materials to underprivileged children" 
-        },
-        { 
-          id: 2, 
-          name: "Health Camp Mumbai", 
-          category: "Healthcare", 
-          location: "Mumbai", 
-          date: "2024-03-10", 
-          beneficiaries_count: 320, 
-          budget: 180000, 
-          description: "Free health checkup camp for rural areas" 
-        },
-        { 
-          id: 3, 
-          name: "Food Distribution Delhi", 
-          category: "Food Distribution", 
-          location: "Delhi", 
-          date: "2024-02-28", 
-          beneficiaries_count: 580, 
-          budget: 150000, 
-          description: "Monthly food distribution drive" 
-        }
-      ]);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle form input changes
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -80,7 +45,6 @@ const Activities = () => {
     });
   };
 
-  // Validate form before submission
   const validateForm = () => {
     if (!formData.name.trim()) {
       toast.error('Activity name is required');
@@ -105,11 +69,9 @@ const Activities = () => {
     return true;
   };
 
-  // Handle form submission (Create or Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate form first
     if (!validateForm()) {
       return;
     }
@@ -121,28 +83,23 @@ const Activities = () => {
         // Update existing activity
         await axios.put(`/activities/${editingActivity.id}`, formData);
         toast.success('✅ Activity updated successfully!');
-        await refreshDashboard('Activity updated! Dashboard refreshed.'); // Refresh dashboard
+        await refreshDashboard('Activity updated! Dashboard refreshed.');
       } else {
         // Create new activity
         await axios.post('/activities', formData);
         toast.success('✅ Activity added successfully!');
-        await refreshDashboard('New activity added! Dashboard updated.'); // Refresh dashboard
+        await refreshDashboard('New activity added! Dashboard updated.');
       }
       
-      // Close modal and refresh list
       setShowModal(false);
       resetForm();
-      fetchActivities(); // Refresh the list
+      fetchActivities();
       
     } catch (error) {
       console.error('Submit error:', error);
       
       if (!error.response) {
-        toast.error('❌ Server not connected. Please start backend.');
-      } else if (error.response.status === 401) {
-        toast.error('❌ Session expired. Please login again.');
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        toast.error('❌ Server not connected.');
       } else {
         toast.error(error.response?.data?.message || 'Operation failed');
       }
@@ -151,7 +108,6 @@ const Activities = () => {
     }
   };
 
-  // Handle delete activity
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this activity?')) {
       return;
@@ -160,20 +116,14 @@ const Activities = () => {
     try {
       await axios.delete(`/activities/${id}`);
       toast.success('✅ Activity deleted successfully');
-      await refreshDashboard('Activity deleted! Dashboard updated.'); // Refresh dashboard
-      fetchActivities(); // Refresh the list
+      await refreshDashboard('Activity deleted! Dashboard updated.');
+      fetchActivities();
     } catch (error) {
       console.error('Delete error:', error);
-      
-      if (!error.response) {
-        toast.error('❌ Server not connected');
-      } else {
-        toast.error('Failed to delete activity');
-      }
+      toast.error('Failed to delete activity');
     }
   };
 
-  // Handle edit button click
   const handleEdit = (activity) => {
     setEditingActivity(activity);
     setFormData({
@@ -188,7 +138,6 @@ const Activities = () => {
     setShowModal(true);
   };
 
-  // Reset form to initial state
   const resetForm = () => {
     setFormData({
       name: '',
@@ -202,7 +151,6 @@ const Activities = () => {
     setEditingActivity(null);
   };
 
-  // Categories for dropdown
   const categories = ['Education', 'Healthcare', 'Food Distribution', 'Shelter', 'Training', 'Environment'];
 
   return (
@@ -227,24 +175,17 @@ const Activities = () => {
             resetForm();
             setShowModal(true);
           }}
-          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all"
+          className="flex items-center space-x-2 px-4 py-2 gradient-bg text-white rounded-lg hover:shadow-lg transition-shadow"
         >
           <FaPlus />
           <span>Add Activity</span>
         </button>
       </div>
 
-      {/* Connection Status Banner */}
-      {!navigator.onLine && (
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
-          <p>⚠️ You are offline. Some features may not work.</p>
-        </div>
-      )}
-
       {/* Activities Grid */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -254,28 +195,28 @@ const Activities = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all p-6"
+              className="glass-card rounded-xl p-6 hover:shadow-xl transition-all"
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
                     {activity.name}
                   </h3>
-                  <span className="inline-block px-2 py-1 mt-2 text-xs rounded-full bg-teal-100 text-teal-800">
+                  <span className="inline-block px-2 py-1 mt-2 text-xs rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
                     {activity.category}
                   </span>
                 </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => handleEdit(activity)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                     title="Edit"
                   >
                     <FaEdit />
                   </button>
                   <button
                     onClick={() => handleDelete(activity.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     title="Delete"
                   >
                     <FaTrash />
@@ -291,7 +232,7 @@ const Activities = () => {
               </div>
 
               {activity.description && (
-                <p className="mt-4 text-sm text-gray-500 border-t pt-4">
+                <p className="mt-4 text-sm text-gray-500 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-4">
                   {activity.description}
                 </p>
               )}
@@ -330,10 +271,9 @@ const Activities = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Activity Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Activity Name <span className="text-red-500">*</span>
+                    Activity Name
                   </label>
                   <input
                     type="text"
@@ -341,22 +281,20 @@ const Activities = () => {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                    placeholder="Enter activity name"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Category */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Category <span className="text-red-500">*</span>
+                    Category
                   </label>
                   <select
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   >
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -364,10 +302,9 @@ const Activities = () => {
                   </select>
                 </div>
 
-                {/* Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Location <span className="text-red-500">*</span>
+                    Location
                   </label>
                   <input
                     type="text"
@@ -375,15 +312,13 @@ const Activities = () => {
                     value={formData.location}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                    placeholder="Enter location"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Date <span className="text-red-500">*</span>
+                    Date
                   </label>
                   <input
                     type="date"
@@ -391,14 +326,13 @@ const Activities = () => {
                     value={formData.date}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Beneficiaries Count */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Beneficiaries Count <span className="text-red-500">*</span>
+                    Beneficiaries Count
                   </label>
                   <input
                     type="number"
@@ -407,15 +341,13 @@ const Activities = () => {
                     onChange={handleInputChange}
                     required
                     min="1"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                    placeholder="Enter number of beneficiaries"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Budget */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Budget (₹) <span className="text-red-500">*</span>
+                    Budget (₹)
                   </label>
                   <input
                     type="number"
@@ -425,12 +357,10 @@ const Activities = () => {
                     required
                     min="0"
                     step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                    placeholder="Enter budget amount"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Description */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Description
@@ -440,18 +370,16 @@ const Activities = () => {
                     value={formData.description}
                     onChange={handleInputChange}
                     rows="3"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                    placeholder="Enter description (optional)"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   ></textarea>
                 </div>
 
-                {/* Form Buttons */}
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
+                    className="flex-1 gradient-bg text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
                   >
-                    {editingActivity ? 'Update Activity' : 'Create Activity'}
+                    {editingActivity ? 'Update' : 'Create'}
                   </button>
                   <button
                     type="button"

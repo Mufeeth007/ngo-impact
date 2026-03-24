@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const dashboardRoutes = require('./routes/dashboard');
+const reportRoutes = require('./routes/reports');
 
 // Load environment variables
 dotenv.config();
@@ -20,6 +22,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Request logging middleware
 app.use((req, res, next) => {

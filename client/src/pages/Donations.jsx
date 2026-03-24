@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaDownload } from 'react-icons/fa';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
+import { useDashboard } from '../context/DashboardContext';
 
 const Donations = () => {
   const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingDonation, setEditingDonation] = useState(null);
+  const { refreshDashboard } = useDashboard();
   const [formData, setFormData] = useState({
     donor_name: '',
     amount: '',
@@ -23,15 +25,12 @@ const Donations = () => {
 
   const fetchDonations = async () => {
     try {
+      setLoading(true);
       const response = await axios.get('/donations');
       setDonations(response.data);
     } catch (error) {
       console.error('Error fetching donations:', error);
-      // Dummy data
-      setDonations([
-        { id: 1, donor_name: "Tata Foundation", amount: 500000, date: "2024-03-01", category: "Education", payment_method: "Bank Transfer" },
-        { id: 2, donor_name: "Infosys Foundation", amount: 350000, date: "2024-03-05", category: "Healthcare", payment_method: "Bank Transfer" }
-      ]);
+      setDonations([]);
     } finally {
       setLoading(false);
     }
@@ -44,49 +43,70 @@ const Donations = () => {
     });
   };
 
+  const validateForm = () => {
+    if (!formData.donor_name.trim()) {
+      toast.error('Donor name is required');
+      return false;
+    }
+    if (!formData.amount || formData.amount <= 0) {
+      toast.error('Valid amount is required');
+      return false;
+    }
+    if (!formData.date) {
+      toast.error('Date is required');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       if (editingDonation) {
         await axios.put(`/donations/${editingDonation.id}`, formData);
-        toast.success('Donation updated successfully');
+        toast.success('✅ Donation updated successfully');
+        await refreshDashboard('Donation updated! Dashboard refreshed.');
       } else {
         await axios.post('/donations', formData);
-        toast.success('Donation added successfully');
+        toast.success('✅ Donation added successfully');
+        await refreshDashboard('New donation added! Dashboard updated.');
       }
+      
       setShowModal(false);
       resetForm();
       fetchDonations();
+      
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Operation failed');
+      console.error('Submit error:', error);
+      
+      if (!error.response) {
+        toast.error('❌ Server not connected.');
+      } else {
+        toast.error(error.response?.data?.message || 'Operation failed');
+      }
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this donation?')) {
-      try {
-        await axios.delete(`/donations/${id}`);
-        toast.success('Donation deleted successfully');
-        fetchDonations();
-      } catch (error) {
-        toast.error('Failed to delete donation');
-      }
+    if (!window.confirm('Are you sure you want to delete this donation?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/donations/${id}`);
+      toast.success('✅ Donation deleted successfully');
+      await refreshDashboard('Donation deleted! Dashboard updated.');
+      fetchDonations();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Failed to delete donation');
     }
   };
-  
-  const handleExport = async () => {
-  try {
-    await exportToCSV('donations');
-  } catch (error) {
-    // Fallback to client-side export
-    const success = generateClientCSV(donations, 'donations');
-    if (success) {
-      toast.success('Donations exported successfully!');
-    } else {
-      toast.error('Export failed');
-    }
-  }
-};
 
   const handleEdit = (donation) => {
     setEditingDonation(donation);
@@ -112,22 +132,28 @@ const Donations = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Donor Name', 'Amount', 'Date', 'Category', 'Payment Method'];
-    const csvData = donations.map(d => [
-      d.donor_name,
-      d.amount,
-      new Date(d.date).toLocaleDateString(),
-      d.category,
-      d.payment_method
-    ]);
-    
-    const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'donations.csv';
-    a.click();
+    try {
+      const headers = ['Donor Name', 'Amount', 'Date', 'Category', 'Payment Method'];
+      const csvData = donations.map(d => [
+        d.donor_name,
+        d.amount,
+        new Date(d.date).toLocaleDateString(),
+        d.category,
+        d.payment_method
+      ]);
+      
+      const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `donations-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('✅ Donations exported successfully!');
+    } catch (error) {
+      toast.error('❌ Export failed');
+    }
   };
 
   const categories = ['Education', 'Healthcare', 'Food Distribution', 'Shelter', 'Training', 'Emergency Relief'];
@@ -135,6 +161,7 @@ const Donations = () => {
 
   const totalAmount = donations.reduce((sum, d) => sum + Number(d.amount), 0);
   const averageAmount = donations.length > 0 ? (totalAmount / donations.length).toFixed(2) : 0;
+  const uniqueDonors = new Set(donations.map(d => d.donor_name)).size;
 
   return (
     <motion.div
@@ -142,11 +169,17 @@ const Donations = () => {
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {/* Header */}
+      {/* Header with Auto-Refresh Indicator */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Donations Management
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+            Donations Management
+          </h2>
+          <p className="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center">
+            <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+            Changes auto-update dashboard
+          </p>
+        </div>
         <div className="flex space-x-3">
           <button
             onClick={exportToCSV}
@@ -168,46 +201,24 @@ const Donations = () => {
         </div>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="glass-card rounded-lg p-4"
-        >
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Total Donations</p>
           <p className="text-2xl font-bold text-gray-800 dark:text-white">{donations.length}</p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="glass-card rounded-lg p-4"
-        >
+        </div>
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
           <p className="text-2xl font-bold text-green-600">₹{totalAmount.toLocaleString()}</p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="glass-card rounded-lg p-4"
-        >
+        </div>
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Average Donation</p>
           <p className="text-2xl font-bold text-primary-600">₹{averageAmount}</p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="glass-card rounded-lg p-4"
-        >
+        </div>
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Unique Donors</p>
-          <p className="text-2xl font-bold text-orange-600">
-            {new Set(donations.map(d => d.donor_name)).size}
-          </p>
-        </motion.div>
+          <p className="text-2xl font-bold text-orange-600">{uniqueDonors}</p>
+        </div>
       </div>
 
       {/* Donations Table */}
@@ -216,12 +227,7 @@ const Donations = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="glass-card rounded-xl overflow-hidden"
-        >
+        <div className="glass-card rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
@@ -232,7 +238,7 @@ const Donations = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Payment Method</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-                </tr>
+                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {donations.map((donation, index) => (
@@ -243,8 +249,12 @@ const Donations = () => {
                     transition={{ delay: index * 0.03 }}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{donation.donor_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">₹{Number(donation.amount).toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                      {donation.donor_name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                      ₹{Number(donation.amount).toLocaleString()}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                       {new Date(donation.date).toLocaleDateString()}
                     </td>
@@ -253,18 +263,22 @@ const Donations = () => {
                         {donation.category}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{donation.payment_method}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      {donation.payment_method}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleEdit(donation)}
                           className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                          title="Edit"
                         >
                           <FaEdit />
                         </button>
                         <button
                           onClick={() => handleDelete(donation.id)}
                           className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                          title="Delete"
                         >
                           <FaTrash />
                         </button>
@@ -275,7 +289,13 @@ const Donations = () => {
               </tbody>
             </table>
           </div>
-        </motion.div>
+          
+          {donations.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 dark:text-gray-400">No donations found. Add your first donation!</p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Add/Edit Modal */}
@@ -292,7 +312,7 @@ const Donations = () => {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="glass-card rounded-xl p-6 max-w-md w-full"
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
@@ -301,19 +321,11 @@ const Donations = () => {
                 </h3>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <FaTimes />
                 </button>
               </div>
-
-              <button
-  onClick={handleExport}
-  className="flex items-center space-x-2 px-4 py-2 glass-card text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
->
-  <FaDownload />
-  <span>Export CSV</span>
-</button>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -326,7 +338,7 @@ const Donations = () => {
                     value={formData.donor_name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                     placeholder="Enter donor name"
                   />
                 </div>
@@ -343,7 +355,7 @@ const Donations = () => {
                     required
                     min="0"
                     step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                     placeholder="Enter amount"
                   />
                 </div>
@@ -358,7 +370,7 @@ const Donations = () => {
                     value={formData.date}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
@@ -371,7 +383,7 @@ const Donations = () => {
                     value={formData.category}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   >
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -388,7 +400,7 @@ const Donations = () => {
                     value={formData.payment_method}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   >
                     {paymentMethods.map(method => (
                       <option key={method} value={method}>{method}</option>
@@ -399,7 +411,7 @@ const Donations = () => {
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 gradient-bg text-white py-2 rounded-lg hover:shadow-lg transition-shadow"
+                    className="flex-1 gradient-bg text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
                   >
                     {editingDonation ? 'Update' : 'Create'}
                   </button>

@@ -21,12 +21,10 @@ const Beneficiaries = () => {
     status: 'active'
   });
 
-  // Fetch beneficiaries on component mount
   useEffect(() => {
     fetchBeneficiaries();
   }, []);
 
-  // Fetch all beneficiaries from backend
   const fetchBeneficiaries = async () => {
     try {
       setLoading(true);
@@ -34,45 +32,12 @@ const Beneficiaries = () => {
       setBeneficiaries(response.data);
     } catch (error) {
       console.error('Error fetching beneficiaries:', error);
-      // Dummy data if backend fails
-      setBeneficiaries([
-        { 
-          id: 1, 
-          name: "Rahul Sharma", 
-          age: 12, 
-          gender: "Male", 
-          location: "Chennai", 
-          category: "Education", 
-          enrollment_date: "2024-01-10", 
-          status: "active" 
-        },
-        { 
-          id: 2, 
-          name: "Priya Patel", 
-          age: 35, 
-          gender: "Female", 
-          location: "Mumbai", 
-          category: "Healthcare", 
-          enrollment_date: "2024-01-15", 
-          status: "active" 
-        },
-        { 
-          id: 3, 
-          name: "Abdul Khan", 
-          age: 45, 
-          gender: "Male", 
-          location: "Delhi", 
-          category: "Food Distribution", 
-          enrollment_date: "2024-02-01", 
-          status: "active" 
-        }
-      ]);
+      setBeneficiaries([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle form input changes
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
@@ -80,7 +45,6 @@ const Beneficiaries = () => {
     });
   };
 
-  // Validate form before submission
   const validateForm = () => {
     if (!formData.name.trim()) {
       toast.error('Name is required');
@@ -101,7 +65,6 @@ const Beneficiaries = () => {
     return true;
   };
 
-  // Handle form submission (Create or Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -111,12 +74,10 @@ const Beneficiaries = () => {
 
     try {
       if (editingBeneficiary) {
-        // Update existing beneficiary
         await axios.put(`/beneficiaries/${editingBeneficiary.id}`, formData);
         toast.success('✅ Beneficiary updated successfully');
         await refreshDashboard('Beneficiary updated! Dashboard refreshed.');
       } else {
-        // Create new beneficiary
         await axios.post('/beneficiaries', formData);
         toast.success('✅ Beneficiary added successfully');
         await refreshDashboard('New beneficiary added! Dashboard updated.');
@@ -130,18 +91,13 @@ const Beneficiaries = () => {
       console.error('Submit error:', error);
       
       if (!error.response) {
-        toast.error('❌ Server not connected. Please start backend.');
-      } else if (error.response.status === 401) {
-        toast.error('❌ Session expired. Please login again.');
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        toast.error('❌ Server not connected.');
       } else {
         toast.error(error.response?.data?.message || 'Operation failed');
       }
     }
   };
 
-  // Handle delete beneficiary
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this beneficiary?')) {
       return;
@@ -150,20 +106,14 @@ const Beneficiaries = () => {
     try {
       await axios.delete(`/beneficiaries/${id}`);
       toast.success('✅ Beneficiary deleted successfully');
-      await refreshDashboard('Beneficiary removed! Dashboard updated.');
+      await refreshDashboard('Beneficiary deleted! Dashboard updated.');
       fetchBeneficiaries();
     } catch (error) {
       console.error('Delete error:', error);
-      
-      if (!error.response) {
-        toast.error('❌ Server not connected');
-      } else {
-        toast.error('Failed to delete beneficiary');
-      }
+      toast.error('Failed to delete beneficiary');
     }
   };
 
-  // Handle edit button click
   const handleEdit = (beneficiary) => {
     setEditingBeneficiary(beneficiary);
     setFormData({
@@ -178,7 +128,6 @@ const Beneficiaries = () => {
     setShowModal(true);
   };
 
-  // Reset form to initial state
   const resetForm = () => {
     setFormData({
       name: '',
@@ -192,7 +141,6 @@ const Beneficiaries = () => {
     setEditingBeneficiary(null);
   };
 
-  // Export to CSV
   const exportToCSV = () => {
     try {
       const headers = ['Name', 'Age', 'Gender', 'Location', 'Category', 'Enrollment Date', 'Status'];
@@ -220,11 +168,9 @@ const Beneficiaries = () => {
     }
   };
 
-  // Categories and locations for dropdowns
   const categories = ['Education', 'Healthcare', 'Food Distribution', 'Shelter', 'Training', 'Employment'];
   const locations = ['Chennai', 'Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Hyderabad', 'Kolkata'];
 
-  // Calculate statistics
   const totalBeneficiaries = beneficiaries.length;
   const activeBeneficiaries = beneficiaries.filter(b => b.status === 'active').length;
   const maleCount = beneficiaries.filter(b => b.gender === 'Male').length;
@@ -239,7 +185,7 @@ const Beneficiaries = () => {
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {/* Header */}
+      {/* Header with Auto-Refresh Indicator */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
@@ -263,7 +209,7 @@ const Beneficiaries = () => {
               resetForm();
               setShowModal(true);
             }}
-            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all"
+            className="flex items-center space-x-2 px-4 py-2 gradient-bg text-white rounded-lg hover:shadow-lg transition-shadow"
           >
             <FaPlus />
             <span>Add Beneficiary</span>
@@ -273,60 +219,33 @@ const Beneficiaries = () => {
 
       {/* Stats Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="glass-card rounded-lg p-4"
-        >
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Total Beneficiaries</p>
           <p className="text-2xl font-bold text-gray-800 dark:text-white">{totalBeneficiaries}</p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="glass-card rounded-lg p-4"
-        >
+        </div>
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Active</p>
           <p className="text-2xl font-bold text-green-600">{activeBeneficiaries}</p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="glass-card rounded-lg p-4"
-        >
+        </div>
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Gender Distribution</p>
           <p className="text-xl font-bold text-gray-800 dark:text-white">
             <span className="text-blue-600">♂ {maleCount}</span> / <span className="text-pink-600">♀ {femaleCount}</span>
           </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="glass-card rounded-lg p-4"
-        >
+        </div>
+        <div className="glass-card rounded-lg p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">Average Age</p>
           <p className="text-2xl font-bold text-orange-600">{averageAge}</p>
-        </motion.div>
+        </div>
       </div>
 
       {/* Beneficiaries Table */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="glass-card rounded-xl overflow-hidden"
-        >
+        <div className="glass-card rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
@@ -339,7 +258,7 @@ const Beneficiaries = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Enrollment Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-                </tr>
+                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {beneficiaries.map((beneficiary, index) => (
@@ -363,7 +282,7 @@ const Beneficiaries = () => {
                       {beneficiary.location}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs rounded-full bg-teal-100 text-teal-800">
+                      <span className="px-2 py-1 text-xs rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
                         {beneficiary.category}
                       </span>
                     </td>
@@ -373,24 +292,24 @@ const Beneficiaries = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         beneficiary.status === 'active' 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
                       }`}>
                         {beneficiary.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleEdit(beneficiary)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
                           title="Edit"
                         >
                           <FaEdit />
                         </button>
                         <button
                           onClick={() => handleDelete(beneficiary.id)}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                           title="Delete"
                         >
                           <FaTrash />
@@ -408,7 +327,7 @@ const Beneficiaries = () => {
               <p className="text-gray-500 dark:text-gray-400">No beneficiaries found. Add your first beneficiary!</p>
             </div>
           )}
-        </motion.div>
+        </div>
       )}
 
       {/* Add/Edit Modal */}
@@ -425,7 +344,7 @@ const Beneficiaries = () => {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full shadow-2xl"
+              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
@@ -441,10 +360,9 @@ const Beneficiaries = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Name Field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Full Name <span className="text-red-500">*</span>
+                    Full Name
                   </label>
                   <input
                     type="text"
@@ -452,16 +370,14 @@ const Beneficiaries = () => {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                    placeholder="Enter full name"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Age and Gender Row */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Age <span className="text-red-500">*</span>
+                      Age
                     </label>
                     <input
                       type="number"
@@ -471,21 +387,20 @@ const Beneficiaries = () => {
                       required
                       min="0"
                       max="120"
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-                      placeholder="Age"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Gender <span className="text-red-500">*</span>
+                      Gender
                     </label>
                     <select
                       name="gender"
                       value={formData.gender}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                     >
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
@@ -494,17 +409,16 @@ const Beneficiaries = () => {
                   </div>
                 </div>
 
-                {/* Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Location <span className="text-red-500">*</span>
+                    Location
                   </label>
                   <select
                     name="location"
                     value={formData.location}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   >
                     <option value="">Select Location</option>
                     {locations.map(loc => (
@@ -513,17 +427,16 @@ const Beneficiaries = () => {
                   </select>
                 </div>
 
-                {/* Category */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Category <span className="text-red-500">*</span>
+                    Category
                   </label>
                   <select
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   >
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -531,10 +444,9 @@ const Beneficiaries = () => {
                   </select>
                 </div>
 
-                {/* Enrollment Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Enrollment Date <span className="text-red-500">*</span>
+                    Enrollment Date
                   </label>
                   <input
                     type="date"
@@ -542,11 +454,10 @@ const Beneficiaries = () => {
                     value={formData.enrollment_date}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   />
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Status
@@ -555,7 +466,8 @@ const Beneficiaries = () => {
                     name="status"
                     value={formData.status}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    required
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -563,13 +475,12 @@ const Beneficiaries = () => {
                   </select>
                 </div>
 
-                {/* Form Buttons */}
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
+                    className="flex-1 gradient-bg text-white py-2 rounded-lg hover:shadow-lg transition-all font-medium"
                   >
-                    {editingBeneficiary ? 'Update Beneficiary' : 'Create Beneficiary'}
+                    {editingBeneficiary ? 'Update' : 'Create'}
                   </button>
                   <button
                     type="button"
@@ -588,5 +499,4 @@ const Beneficiaries = () => {
   );
 };
 
-// IMPORTANT: This must be a default export
 export default Beneficiaries;
